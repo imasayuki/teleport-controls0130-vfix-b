@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>controler Demo</title>
+<!-- 1.2.0 なら弾が出る でも弾は跳ね返らない-->
+  <script src="https://aframe.io/releases/1.1.0/aframe.min.js"></script>
+<!--テレポート機能ライブラリ 最新はaframe-blink-controls-->  
+  <script src="https://cdn.jsdelivr.net/npm/aframe-blink-controls/dist/aframe-blink-controls.min.js"></script>
+<!--物理ライブラリ--　最新はaframe-physics-system@1.5.0?-->
+  <script src="//cdn.rawgit.com/donmccurdy/aframe-physics-system/v4.0.1/dist/aframe-physics-system.min.js"></script>
+</head>
+  <script>
+    AFRAME.registerComponent('input-listen', {
+        init:
+            function () {
+                //Declaration and initialization of flag 
+                //which exprains grip button is pressed or not.
+                //"this.el" reffers ctlR or L in this function
+                const txt = document.getElementById("txt");
+                this.el.grip = false;
+              
+                //スティックの縦方向と横方向の値の和
+                this.el.sumY=1;
+                this.el.sumX=0;
+
+                //トリガーボタンを押し始めたときに実行される(両手に対応)(Trigger Pressed)
+                this.el.addEventListener('triggerdown', function (e) {
+                    txt.setAttribute("value", "TriggerDown!!");
+
+                    //コントローラの三次元座標を取得(thisはコントローラを参照)("this" reffers ctlR or L in this function)
+                    var point = this.object3D.getWorldPosition();
+
+                    //txt.setAttribute("value",point.x.toFixed(2)+","+point.y.toFixed(2)+","+point.z.toFixed(2));
+
+                    //球エンティティを生成(Creating ball entity)
+                    var ball = document.createElement('a-sphere');
+                    ball.setAttribute('class', 'ball');
+                    ball.setAttribute('scale', '0.2 0.2 0.2');
+                    ball.setAttribute('position', point);
+                    //物理演算の影響をオンにする
+                    ball.setAttribute('dynamic-body', 'shape: sphere; sphereRadius:0.2; ');
+                    //Instantiate ball entity in a-scene
+                    var scene = document.querySelector('a-scene');
+                    scene.appendChild(ball);
+
+                    //レイキャスターの向きを取得(Getting raycaster which was attached to ctrlR or L)
+                    var dir = this.getAttribute("raycaster").direction;
+                    //ボールを飛ばす力を計算(Setting shoot dierction and speed) 
+                    var force = new THREE.Vector3(dir.x, dir.y, dir.z);
+                    //2000倍くらいして結構な力をかける準備をする
+                    force.multiplyScalar(2000);              
+                    //ボールにforceというプロパティを宣言して代入
+                    ball.force = this.object3D.localToWorld(force);
+
+                    //物理的演算に必要な情報をballが読み込み終わったら弾を撃つ shoot "ball" after physics information getting ready) 
+                    ball.addEventListener('body-loaded', function (e) {
+                        //弾(this)の位置を取得("this" reffers ball entity in this function)
+                        var p = this.object3D.position;
+                        //計算した弾(this)に加える勢いを取得
+                        var f = this.force;
+                        //弾に力を加えて飛ばす(this.velocity was calculated before this function is called)
+                        this.body.applyForce(
+                            new CANNON.Vec3(f.x, f.y, f.z),
+                            new CANNON.Vec3(p.x, p.y, p.z)
+                        );
+                    });
+                });
+              
+                //トリガーボタンを離したときに実行される(両手に対応)(Trigger Released)
+                this.el.addEventListener("triggerup", function (e) {
+                    txt.setAttribute("value", "TriggerUp!!");
+                });
+              
+
+                //グリップボタンを押し始めたときに実行される(両手に対応)(Grip Pressed)
+                this.el.addEventListener('gripdown', function (e) {
+                    txt.setAttribute("value", "grip pressed");
+                  
+                    //グリップを握っているをtrueとしてセット(Setting grip flag as true)
+                    this.grip = true;
+                  
+                    //グリップを押し始めたときにスティックの縦方向と横方向の値の和を初期化
+                    this.sumY=1;
+                    this.sumX=0;
+                  
+                });
+                //グリップボタンを離したときに実行される(両手に対応)(Grip Released)
+                this.el.addEventListener('gripup', function (e) {
+                    txt.setAttribute("value", "grip released");
+                    //グリップを離したをfalseとしてセット(Setting grip flag as true)Setting grip flag as false.
+                    this.grip = false;                 
+                });
+
+                //レイキャスターが何かに交差したとき(Raycaster intersected with something)
+                this.el.addEventListener('raycaster-intersection', function (e) {
+         			      txt.setAttribute("value", "Intersection:captured");
+                    //複数選択された場合は0番目を覚えさせておく(Store first selected object as selectedObj)
+                    this.selectedObj = e.detail.els[0];
+                });
+                //レイキャスターの交差が解除されたとき(Raycaster intersection is finished)
+                this.el.addEventListener('raycaster-intersection-cleared', function (e) {
+                    txt.setAttribute("value", "Intersection:cleared");
+                    //選択オブジェクトの情報をリセット(Clear information of selectedObj)
+                    this.selectedObj = null;
+                });
+
+                //Aボタンを押し始めたときに実行される(右手のみ)(A-buttorn Pressed)
+                this.el.addEventListener('abuttondown', function (e) {
+                    txt.setAttribute("value", "a-button pressed");
+                    //ballEntity(弾)をすべて取得(Aqurire all ball entities which are instantiated in a-scene)
+                    var els = document.querySelectorAll('.ball');
+                    //弾を一つずつ削除(Destroy all ball entities)
+                    for (var i = 0; i < els.length; i++) {
+                        els[i].parentNode.removeChild(els[i]);
+                    }
+                });
+
+                //xボタンを押し始めたときに実行される(左手のみ)(X-button Pressed) 
+                this.el.addEventListener('xbuttondown', function (e) {
+                    txt.setAttribute("value", "x-button pressed");
+                    //Start pointing position to teleport  
+                    this.emit('teleportstart');
+                });
+
+                //xボタンを離したときに実行される (左手のみ)(X-button Released) 
+                this.el.addEventListener('xbuttonup', function (e) {
+                    txt.setAttribute("value", "x-button released");
+                    //Jump to pointed position
+                    this.emit('teleportend');
+                });
+              
+                //ジョイスティックを傾けたとき(両手に対応)
+                this.el.addEventListener('thumbstickmoved', function (e) {
+                  if (e.detail.y > 0.95) { txt.setAttribute("value", "DOWN"); }
+                  if (e.detail.y < -0.95) { txt.setAttribute("value", "UP"); }
+                  if (e.detail.x < -0.95) { txt.setAttribute("value", "LEFT"); }
+                  if (e.detail.x > 0.95) { txt.setAttribute("value", "RIGHT"); }
+          
+                  //x,yの値が-1~1で得られるのでそれを文字で表示
+                  txt2.setAttribute("value", e.detail.x.toFixed(2)+","+e.detail.y.toFixed(2)+","+this.sumX.toFixed(2)+","+this.sumY.toFixed(2));
+                  //スティックの縦と横方向の値合計．-をかけるのはスティックの前後と±を一致させるため
+                  this.sumY+=(-e.detail.y*0.01);
+                  this.sumX+=(e.detail.x*0.01);
+                });
+
+                //console.log(this);
+            },
+
+        //毎フレーム更新(called every frame)
+        tick: function () {
+            //選択中のオブジェクトがあり、かつグリップを握っている最中であれば、そのオブジェクトを追従させるコード
+            if (!this.el.selectedObj) { return; }
+            if (!this.el.grip) { return; }
+            //コントローラに追加したraycasterを取得(Getting raycaster component which is attatched to ctlR or L)
+            //this.el means entity of ctlR or L in this function.
+            var ray = this.el.getAttribute("raycaster").direction;
+            //コントローラの1.2m手前の座標を計算(コントローラが原点) (setting tip of raycaster as 1.2m forward of controller)
+            var p = new THREE.Vector3(ray.x, ray.y, ray.z);
+            p.normalize();
+          
+            var w = new THREE.Vector3(1.0, 0.0, 0.0);
+            w.normalize();
+          
+           //スティックの前後により選択されているオブジェクトを前後、左右に移動
+            p.multiplyScalar(1.2*this.el.sumY);
+            w.multiplyScalar(1.2*this.el.sumX);
+            p.addVectors(p, w);          
+          
+           //ローカル座標(コントローラ中心)をワールド座標に変換(Convert local position into world coordinate)
+            this.el.object3D.localToWorld(p);
+            //Raycasterの先端に選択オブジェクトを追従させる(Move selected object to follow the tip of raycaster)
+            this.el.selectedObj.object3D.position.set(p.x, p.y, p.z);
+        }
+    });
+
+
+</script>
+
+<body>
+  <!-- gravity:0 無重力化 restitution: 0.9 高反発 -->
+    <a-scene physics="debug: false; gravity: 0; restitution: 0.9; " background="color: #AAAAAA">
+        <!--collidable:enable to be detect intersection with raycaster-->
+        <!--static-body:disable using gravity but can interact with physics objects-->
+        <a-sphere class="collidable" static-body position="0 1.25 -4" radius="0.8" color="#EF2D5E" shadow></a-sphere>
+        <a-cylinder class="collidable" static-body position="1 0.75 -2" radius="0.5" height="1.5" color="#FFC65D" shadow></a-cylinder>
+        <a-box class="collidable" static-body position="-1 0.5 -2" rotation="0 0 0" color="#4CC3D9" shadow> </a-box>
+
+        <!--a-plane:representing walls of virtual room-->
+        <a-plane static-body position="0 0 0" rotation="-90 0 0" width="10" height="10" color="#7BC8A4"
+            src="https://cdn.glitch.global/606a882c-4d64-4de1-8dd3-6751658a0321/back.png?v=1705540696415" shadow>
+        </a-plane>
+        <a-plane static-body position="0 5 0" rotation="90 0 0" width="10" height="10" color="#7BC8A4"
+            src="https://cdn.glitch.global/606a882c-4d64-4de1-8dd3-6751658a0321/back.png?v=1705540696415" shadow>
+        </a-plane>
+        <a-plane static-body position="0 2.5 -5" rotation="0 0 0" width="10" height="5" color="#7BC8FF"
+            src="https://cdn.glitch.global/606a882c-4d64-4de1-8dd3-6751658a0321/back.png?v=1705540696415" shadow>
+        </a-plane>
+        <a-plane static-body position="0 2.5 5" rotation="0 180 0" width="10" height="5" color="#7BC8FF"
+            src="https://cdn.glitch.global/606a882c-4d64-4de1-8dd3-6751658a0321/back.png?v=1705540696415" shadow>
+        </a-plane>
+        <a-plane static-body position="5 2.5 0" rotation="0 -90 0" width="10" height="5" color="#7BC8FF"
+            src="https://cdn.glitch.global/606a882c-4d64-4de1-8dd3-6751658a0321/back.png?v=1705540696415" shadow>
+        </a-plane>
+        <a-plane static-body position="-5 2.5 0" rotation="0 90 0" width="10" height="5" color="#7BC8FF"
+            src="https://cdn.glitch.global/606a882c-4d64-4de1-8dd3-6751658a0321/back.png?v=1705540696415" shadow>
+        </a-plane>
+
+        <!-- dynamic-bod 無重力(gravity:0)状態 -->    
+        <a-box
+	        position="0 2 -3"
+          scale="0.5 0.5 0.5"
+	        color="#00FF00"
+	        dynamic-body="linearDamping:0.9;mass:10;"
+        ></a-box>
+      
+        <a-assets >
+	        <a-asset-item id="submarine_gltf" src="https://cdn.glitch.global/40445a66-f8b9-4966-9b49-aa2ec614f473/pokeball_3d_print_ready.glb?v=1707359717470"></a-asset-item>
+        </a-assets>
+        <a-gltf-model 
+          src="#submarine_gltf"
+          scale="4 4 4"          
+          position="0 1 -2" 
+          rotation="180 0 180"
+ 	        dynamic-body="linearDamping:0.9;mass:10;"
+         ></a-gltf-model>
+
+        <a-entity id="cameraRig">
+        <!-- camera & ctlL,R を　cameraRig　の子要素(entity)にして、まとめて目的地へteleport -->
+            <a-entity id="head" camera wasd-controls look-controls position="0 1.6 0">
+           <!--         <a-cursor></a-cursor> 1.1.0で定義すると文字列が表示されない -->
+              <a-text id="txt" value="---" position="0 0 -1" scale="0.5 0.5 0.5" align="center" color="#FFFFFF"></a-text>
+  
+           <!--     x,yの値が-1~1で得られるのでそれを文字で表示     -->
+               <a-text id="txt2" value="0,0,0,0" position="0 -0.1 -1" scale="0.5 0.5 0.5" align="center" color="#FFFFFF"></a-text>
+
+            </a-entity>
+            <a-entity  id="ctlL" 
+               blink-controls="cameraRig: #cameraRig; teleportOrigin:#head; startEvents: teleportstart; endEvents: teleportend" laser-controls="hand: left" raycaster="objects: .collidable; far: 1.2" input-listen>
+               <a-sphere radius="0.01" position="0 0 -1.2" color="#FFFFFF"></a-sphere>
+          </a-entity>
+            <a-entity id="ctlR"
+               laser-controls="hand: right" raycaster="objects: .collidable; far: 1.2" input-listen>
+               <a-sphere radius="0.01" position="0 0 -1.2" color="#FFFFFF"></a-sphere>
+            </a-entity>
+        </a-entity>
+
+    </a-scene>
+</body>
+
+</html>
